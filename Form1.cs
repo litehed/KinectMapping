@@ -4,13 +4,14 @@ using System.Drawing;
 using System.Windows.Forms;
 using Microsoft.Kinect;
 using OpenGL;
+using System.Runtime.InteropServices;
+using System.Windows.Media.Media3D;
 
 namespace KinectMapping
 {
     public partial class MainWindow : Form
     {
 
-        private KinectSensor sensor;
         private KinectUtil kinectUtil;
 
         private float prevYaw = 0, prevPitch = 0, prevRoll = 0;
@@ -23,7 +24,7 @@ namespace KinectMapping
         }
 
         private void Form_Load(object sender, EventArgs e) {
-            kinectUtil = new KinectUtil(ref sensor, ref kinect_display);
+            kinectUtil = new KinectUtil(ref kinect_display);
             if(!kinectUtil.initKinect()) {
                 Close();
                 return;
@@ -38,21 +39,46 @@ namespace KinectMapping
             // Here you can allocate resources or initialize state
             Gl.MatrixMode(MatrixMode.Projection);
             Gl.LoadIdentity();
-            Gl.Ortho(-1.0, 1.0f, -1.0, 1.0, -1.0, 1.0);
+            //Gl.Ortho(-1.0, 1.0f, -1.0, 1.0, -1.0, 1.0);
+            //Gl.Frustum(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
 
             Gl.MatrixMode(MatrixMode.Modelview);
             Gl.LoadIdentity();
+
         }
 
         private void RenderControl_Render(object sender, GlControlEventArgs e) {
-            Control senderControl = (Control)sender;
+            //Control senderControl = (Control)sender;
+            //Gl.Viewport(0, 0, senderControl.ClientSize.Width, senderControl.ClientSize.Height);
+            Gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+            int index = 0;
+                //Gl.PointSize(2);
+            if (kinectUtil.getKinect() != null && kinectUtil.getCamSpacePoints() != null)
+            {
+                Gl.Begin(PrimitiveType.Points);
+                //Gl.Color3(1.0f, 0.0f, 0.0f);
 
-            Gl.Viewport(0, 0, senderControl.ClientSize.Width, senderControl.ClientSize.Height);
-            Gl.Clear(ClearBufferMask.ColorBufferBit);
+                foreach (CameraSpacePoint point in kinectUtil.getCamSpacePoints())
+                {
+                    if (!float.IsInfinity(point.X) && !float.IsInfinity(point.Y) && !float.IsInfinity(point.Z))
+                    {
+                        index++;
+                        if(index % 3 == 0)
+                        {
+                            Gl.Vertex3(point.X, point.Y, point.Z);
 
+                        }
+                    }
+                }
+                Gl.End();
+            }
+        }
+
+        private void drawSquare()
+        {
             //Front
             Gl.Begin(PrimitiveType.Quads);
-            Gl.Color3(1.0f, 0.0f, 0.0f); 
+            Gl.Color3(1.0f, 0.0f, 0.0f);
             Gl.Vertex3(-0.5f, -0.5f, 0.5f);
             Gl.Vertex3(0.5f, -0.5f, 0.5f);
             Gl.Vertex3(0.5f, 0.5f, 0.5f);
@@ -98,7 +124,6 @@ namespace KinectMapping
             Gl.Vertex3(0.5f, 0.5f, 0.5f);
             Gl.Vertex3(0.5f, -0.5f, 0.5f);
             Gl.End();
-
         }
 
         private void YawSlider_ValueChanged(object sender, EventArgs e)

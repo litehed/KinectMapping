@@ -13,6 +13,7 @@ namespace KinectMapping
         private DepthFrameReader depthReader = null;
         private Bitmap colorBitmap = null;
         private CoordinateMapper coordinateMapper = null;
+        private CameraSpacePoint[] cameraSpacePoints = null;
 
         private int kinect_width = 1920;
         private int kinect_height = 1080;
@@ -78,6 +79,14 @@ namespace KinectMapping
             }
         }
 
+        public CameraSpacePoint[] getCamSpacePoints() {
+            return cameraSpacePoints;
+        }
+
+        public KinectSensor getKinect() {
+            return sensor;
+        }
+
         private void colorReader_FrameArrived(object sender, ColorFrameArrivedEventArgs e) {
             ColorFrame frame = e.FrameReference.AcquireFrame();
 
@@ -88,7 +97,7 @@ namespace KinectMapping
 
                 try {
                     TransferPixelsToBitmapObject((Bitmap)(kinect_display.Image), pixelData);
-                    kinect_display.Refresh();
+                    //kinect_display.Refresh();
                 }
                 catch (Exception ex) {
                     MessageBox.Show(ex.Message);
@@ -101,16 +110,16 @@ namespace KinectMapping
         private void depthReader_FrameArrived(object sender, DepthFrameArrivedEventArgs e) {
             DepthFrame frame = e.FrameReference.AcquireFrame();
             if (frame != null) {
-                ushort[] depthData = new ushort[frame.FrameDescription.LengthInPixels];
+                ushort[] depthData = new ushort[frame.FrameDescription.Width * frame.FrameDescription.Height];
                 frame.CopyFrameDataToArray(depthData);
 
-                CameraSpacePoint[] cameraSpacePoints = new CameraSpacePoint[depthData.Length];
+                cameraSpacePoints = new CameraSpacePoint[depthData.Length];
                 coordinateMapper.MapDepthFrameToCameraSpace(depthData, cameraSpacePoints);
 
-                for(int i = 0; i < cameraSpacePoints.Length; i++) {
-                    CameraSpacePoint point = cameraSpacePoints[i];
-                    Console.WriteLine("Point {0}: ({1:0.00}, {2:0.00}, {3:0.00})", i, point.X, point.Y, point.Z);
-                }
+                //for(int i = 0; i < cameraSpacePoints.Length; i++) {
+                  //  CameraSpacePoint point = cameraSpacePoints[i];
+                 //   Console.WriteLine("Point {0}: ({1:0.00}, {2:0.00}, {3:0.00})", i, point.X, point.Y, point.Z);
+               // }
             }
 
         }
