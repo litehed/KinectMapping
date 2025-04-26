@@ -47,7 +47,7 @@ namespace KinectMapping
             this.kinect_display.Location = new System.Drawing.Point(65, 24);
             this.kinect_display.Margin = new System.Windows.Forms.Padding(2);
             this.kinect_display.Name = "kinect_display";
-            this.kinect_display.Size = new System.Drawing.Size(720, 439);
+            this.kinect_display.Size = new System.Drawing.Size(720, 440);
             this.kinect_display.SizeMode = System.Windows.Forms.PictureBoxSizeMode.StretchImage;
             this.kinect_display.TabIndex = 0;
             this.kinect_display.TabStop = false;
@@ -118,13 +118,11 @@ namespace KinectMapping
             // pointCloudControl
             // 
             this.pointCloudControl.BackColor = System.Drawing.Color.Black;
-            this.pointCloudControl.Location = new System.Drawing.Point(827, 81);
+            this.pointCloudControl.Location = new System.Drawing.Point(836, 201);
             this.pointCloudControl.Name = "pointCloudControl";
-            this.pointCloudControl.Size = new System.Drawing.Size(360, 360);
+            this.pointCloudControl.Size = new System.Drawing.Size(360, 220);
             this.pointCloudControl.TabIndex = 8;
             this.pointCloudControl.VSync = false;
-            this.pointCloudControl.Load += new System.EventHandler(this.pointCloudControl_Load);
-            this.pointCloudControl.Paint += new System.Windows.Forms.PaintEventHandler(this.pointCloudControl_Paint);
             // 
             // MainWindow
             // 

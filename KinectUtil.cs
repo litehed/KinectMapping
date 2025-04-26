@@ -1,5 +1,6 @@
 ﻿using Microsoft.Kinect;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -106,6 +107,7 @@ namespace KinectMapping
                 }
 
                 sensor.Close();
+                sensor = null;
             }
         }
 
@@ -151,6 +153,27 @@ namespace KinectMapping
                 }
             }
         }
+
+        public List<CameraSpacePoint> GetPointCloud()
+        {
+            var points = new List<CameraSpacePoint>();
+
+            if (cameraSpacePoints == null)
+                return points;
+
+            for (int i = 0; i < cameraSpacePoints.Length; i++)
+            {
+                CameraSpacePoint p = cameraSpacePoints[i];
+
+                if (!float.IsInfinity(p.X) && !float.IsNaN(p.X) && !float.IsInfinity(p.Y) && !float.IsNaN(p.Y) && !float.IsInfinity(p.Z) && !float.IsNaN(p.Z))
+                {
+                    points.Add(p);
+                }
+            }
+
+            return points;
+        }
+
 
         private void TransferPixelsToBitmapObject(Bitmap bmTarget, byte[] byPixelsForBitmap)
         {

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Windows.Forms;
 using Microsoft.Kinect;
+using OpenTK;
 using OpenTK.Graphics.OpenGL;
 
 namespace KinectMapping
@@ -10,8 +11,13 @@ namespace KinectMapping
 
         private KinectSensor sensor;
         private KinectUtil kinectUtil;
+        private KinectPointCloudRenderer pointCloudRenderer;
 
         private float prevYaw = 0, prevPitch = 0, prevRoll = 0;
+        private float zoomLevel = 1.0F;
+
+
+        double[] bounds = { -1, 1, -1, 1, 0.5, 8 };
 
         public MainWindow()
         {
@@ -30,38 +36,28 @@ namespace KinectMapping
                 Close();
                 return;
             }
+
+            pointCloudRenderer = new KinectPointCloudRenderer(kinectUtil, pointCloudControl);
+
+            Timer renderTimer = new Timer();
+            renderTimer.Interval = 33; // 33ms = ~30 frames per second
+            renderTimer.Tick += (s, args) => pointCloudControl.Invalidate();
+            renderTimer.Start();
         }
 
         private void MainWindow_FormClosed(object sender, FormClosedEventArgs e)
         {
-            kinectUtil.stopKinect();
-        }
+            if (kinectUtil != null)
+            {
+                kinectUtil.stopKinect();
+                sensor = null;
+            }
 
-        private void pointCloudControl_Load(object sender, EventArgs e)
-        {
-            GL.MatrixMode(MatrixMode.Projection);
-            GL.LoadIdentity();
-            GL.Ortho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
-            GL.MatrixMode(MatrixMode.Modelview);
-            GL.LoadIdentity();
-
-            GL.Viewport(0, 0, pointCloudControl.Width, pointCloudControl.Height);
-            GL.Enable(EnableCap.DepthTest);
-        }
-
-        private void pointCloudControl_Paint(object sender, PaintEventArgs e)
-        {
-            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-            GL.LoadIdentity();
-
-            // Apply rotation from sliders
-            GL.Rotate(yawSlider.Value, 0.0f, 1.0f, 0.0f);   // Yaw around Y axis
-            GL.Rotate(pitchSlider.Value, 1.0f, 0.0f, 0.0f); // Pitch around X axis
-            GL.Rotate(rollSlider.Value, 0.0f, 0.0f, 1.0f);  // Roll around Z axis
-
-            drawCube();
-
-            pointCloudControl.SwapBuffers();
+            if (pointCloudRenderer != null)
+            {
+                pointCloudRenderer.Dispose();
+                pointCloudRenderer = null;
+            }
         }
 
         private void YawSlider_ValueChanged(object sender, EventArgs e)
@@ -80,11 +76,6 @@ namespace KinectMapping
         {
             Console.WriteLine("Roll: " + this.rollSlider.Value);
             pointCloudControl.Invalidate();
-        }
-
-        private float toRadians(int deg)
-        {
-            return (float)((Math.PI / 180) * deg);
         }
 
         private void drawCube()
