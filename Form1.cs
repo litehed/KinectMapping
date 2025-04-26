@@ -16,9 +16,6 @@ namespace KinectMapping
         private float prevYaw = 0, prevPitch = 0, prevRoll = 0;
         private float zoomLevel = 1.0F;
 
-
-        double[] bounds = { -1, 1, -1, 1, 0.5, 8 };
-
         public MainWindow()
         {
             InitializeComponent();
@@ -40,7 +37,7 @@ namespace KinectMapping
             pointCloudRenderer = new KinectPointCloudRenderer(kinectUtil, pointCloudControl);
 
             Timer renderTimer = new Timer();
-            renderTimer.Interval = 33; // 33ms = ~30 frames per second
+            renderTimer.Interval = 34; // ~30 frames per second
             renderTimer.Tick += (s, args) => pointCloudControl.Invalidate();
             renderTimer.Start();
         }
@@ -63,20 +60,31 @@ namespace KinectMapping
         private void YawSlider_ValueChanged(object sender, EventArgs e)
         {
             Console.WriteLine("Yaw: " + this.yawSlider.Value);
+            pointCloudRenderer.SetYawPitchRoll(this.yawSlider.Value, this.pitchSlider.Value, this.rollSlider.Value);
             pointCloudControl.Invalidate();
         }
 
         private void PitchSlider_ValueChanged(object sender, EventArgs e)
         {
             Console.WriteLine("Pitch: " + this.pitchSlider.Value);
+            pointCloudRenderer.SetYawPitchRoll(this.yawSlider.Value, this.pitchSlider.Value, this.rollSlider.Value);
+
             pointCloudControl.Invalidate();
+        }
+
+        private void pointCloudControl_Load(object sender, EventArgs e)
+        {
+
         }
 
         private void RollSlider_ValueChanged(object sender, EventArgs e)
         {
             Console.WriteLine("Roll: " + this.rollSlider.Value);
+            pointCloudRenderer.SetYawPitchRoll(this.yawSlider.Value, this.pitchSlider.Value, this.rollSlider.Value);
+
             pointCloudControl.Invalidate();
         }
+
 
         private void drawCube()
         {

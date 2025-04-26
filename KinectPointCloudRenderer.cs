@@ -25,6 +25,7 @@ namespace KinectMapping
         private float pitch = 0.0f;
         private float roll = 0.0f;
 
+
         public KinectPointCloudRenderer(KinectUtil kinectUtil, GLControl glControl)
         {
             this.kinectUtil = kinectUtil;
@@ -57,8 +58,8 @@ namespace KinectMapping
                 GL.DeleteBuffer(vboColorId);
             }
 
-            int width = 512;
-            int height = 424;
+            int width = kinectUtil.getDepthWidth();
+            int height = kinectUtil.getDepthHeight();
 
             // Generate vertex buffer
             vboVertexId = GL.GenBuffer();
@@ -73,6 +74,7 @@ namespace KinectMapping
                           IntPtr.Zero, BufferUsageHint.DynamicDraw);
 
             vboInitialized = true;
+
         }
 
         private void UpdateVBOs()
@@ -87,17 +89,43 @@ namespace KinectMapping
             float[] vertices = new float[points.Count * 3];
             float[] colors = new float[points.Count * 3];
 
-            for (int i = 0; i < points.Count; i += 3)
+            float minDepth = 0;
+            float maxDepth = 4.3F;
+
+            var colorPoints = kinectUtil.MapDepthPointsToColorSpace();
+            byte[] colorData = kinectUtil.GetColorPixelData();
+            int colorWidth = kinectUtil.GetColorWidth();
+            int colorHeight = kinectUtil.GetColorHeight();
+
+            int validPointCount = 0;
+            for (int i = 0; i < points.Count; i++)
             {
                 var point = points[i];
+                var colorPoint = colorPoints[i];
 
-                vertices[i * 3] = point.X;
-                vertices[i * 3 + 1] = point.Y;
-                vertices[i * 3 + 2] = -point.Z;
-                float normalizedDepth = Math.Max(0.0f, Math.Min(1.0f, (point.Z - 0.5f) / 4.0f));
-                colors[i * 3] = 1 - normalizedDepth;
-                colors[i * 3 + 1] = 0.0f;
-                colors[i * 3 + 2] = normalizedDepth;
+                vertices[validPointCount * 3] = point.X;
+                vertices[validPointCount * 3 + 1] = point.Y;
+                vertices[validPointCount * 3 + 2] = -point.Z;
+
+                if (colorPoint.X >= 0 && colorPoint.X < colorWidth &&
+                    colorPoint.Y >= 0 && colorPoint.Y < colorHeight)
+                {
+                    int colorIndex = ((int)colorPoint.Y * colorWidth + (int)colorPoint.X) * 4;
+
+                    // BGR to RGB
+                    colors[validPointCount * 3] = colorData[colorIndex + 2] / 255.0f;
+                    colors[validPointCount * 3 + 1] = colorData[colorIndex + 1] / 255.0f;
+                    colors[validPointCount * 3 + 2] = colorData[colorIndex] / 255.0f;
+                }
+                else
+                {
+                    // Fallback in case somethings wrong
+                    colors[validPointCount * 3] = 1.0f;
+                    colors[validPointCount * 3 + 1] = 1.0f;
+                    colors[validPointCount * 3 + 2] = 1.0f;
+                }
+
+                validPointCount++;
             }
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, vboVertexId);

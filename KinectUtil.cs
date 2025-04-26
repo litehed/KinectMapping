@@ -18,6 +18,9 @@ namespace KinectMapping
         private int kinect_width = 1920;
         private int kinect_height = 1080;
 
+        private int depth_width = 0;
+        private int depth_height = 0;
+
         private PictureBox kinectDisplay;
         private Bitmap colorBitmap = null;
 
@@ -65,6 +68,8 @@ namespace KinectMapping
                 var depthDesc = sensor.DepthFrameSource.FrameDescription;
                 depthData = new ushort[depthDesc.LengthInPixels];
                 cameraSpacePoints = new CameraSpacePoint[depthDesc.LengthInPixels];
+                depth_width = depthDesc.Width;
+                depth_height = depthDesc.Height;
 
                 colorBitmap = new Bitmap(kinect_width, kinect_height);
 
@@ -145,7 +150,7 @@ namespace KinectMapping
 
                     coordinateMapper.MapDepthFrameToCameraSpace(depthData, cameraSpacePoints);
 
-                    for (int i = 0; i < cameraSpacePoints.Length; i += 5)
+                    for (int i = 0; i < cameraSpacePoints.Length; i++)
                     {
                         CameraSpacePoint point = cameraSpacePoints[i];
                         //Console.WriteLine("Point {0}: ({1:0.00}, {2:0.00}, {3:0.00})", i, point.X, point.Y, point.Z);
@@ -174,6 +179,58 @@ namespace KinectMapping
             return points;
         }
 
+        public List<ColorSpacePoint> MapDepthPointsToColorSpace()
+        {
+            if (cameraSpacePoints == null || depthData == null)
+                return new List<ColorSpacePoint>();
+
+            var depthFrameDescription = sensor.DepthFrameSource.FrameDescription;
+            ColorSpacePoint[] colorSpacePoints = new ColorSpacePoint[depthFrameDescription.Width * depthFrameDescription.Height];
+
+            coordinateMapper.MapDepthFrameToColorSpace(depthData, colorSpacePoints);
+
+            // Filter the color space points to match depths
+            var filteredPoints = new List<ColorSpacePoint>();
+
+            for (int i = 0; i < cameraSpacePoints.Length; i++)
+            {
+                CameraSpacePoint p = cameraSpacePoints[i];
+
+                if (!float.IsInfinity(p.X) && !float.IsNaN(p.X) &&
+                    !float.IsInfinity(p.Y) && !float.IsNaN(p.Y) &&
+                    !float.IsInfinity(p.Z) && !float.IsNaN(p.Z))
+                {
+                    filteredPoints.Add(colorSpacePoints[i]);
+                }
+            }
+
+            return filteredPoints;
+        }
+
+        public byte[] GetColorPixelData()
+        {
+            return colorPixelData;
+        }
+
+        public int GetColorWidth()
+        {
+            return kinect_width;
+        }
+
+        public int GetColorHeight()
+        {
+            return kinect_height;
+        }
+
+        public int getDepthWidth()
+        {
+            return depth_width;
+        }
+
+        public int getDepthHeight()
+        {
+            return depth_height;
+        }
 
         private void TransferPixelsToBitmapObject(Bitmap bmTarget, byte[] byPixelsForBitmap)
         {
