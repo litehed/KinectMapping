@@ -2,39 +2,50 @@
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace KinectMapping
 {
-    internal class KinectUtil
+    internal class KinectUtil : IDisposable
     {
         private KinectSensor sensor = null;
         private ColorFrameReader colorReader = null;
         private DepthFrameReader depthReader = null;
-        private Bitmap colorBitmap = null;
         private CoordinateMapper coordinateMapper = null;
 
         private int kinect_width = 1920;
         private int kinect_height = 1080;
 
-        private PictureBox kinect_display;
+        private PictureBox kinectDisplay;
+        private Bitmap colorBitmap = null;
 
-        public KinectUtil(ref PictureBox kinect_display) {
-            this.kinect_display = kinect_display;
+        private byte[] colorPixelData = null;
+        private ushort[] depthData = null;
+        private CameraSpacePoint[] cameraSpacePoints = null;
+
+        private bool isDisposed = false;
+
+        public KinectUtil(PictureBox kinectDisplay)
+        {
+            this.kinectDisplay = kinectDisplay;
         }
 
-        public KinectUtil(ref KinectSensor sensor, ref PictureBox kinect_display) { 
+        public KinectUtil(KinectSensor sensor, PictureBox kinectDisplay)
+        {
             this.sensor = sensor;
-            this.kinect_display = kinect_display;
+            this.kinectDisplay = kinectDisplay;
         }
 
-        public bool initKinect() {
-            try {
-                sensor = KinectSensor.GetDefault();
-                coordinateMapper = sensor.CoordinateMapper;
-                if (sensor == null) {
+        public bool initKinect()
+        {
+            try
+            {
+                if (sensor == null)
+                {
                     return false;
                 }
+                coordinateMapper = sensor.CoordinateMapper;
 
                 colorReader = sensor.ColorFrameSource.OpenReader();
                 colorReader.FrameArrived += colorReader_FrameArrived;
@@ -44,11 +55,23 @@ namespace KinectMapping
 
                 startKinect();
 
+                var colorDesc = sensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
+                kinect_width = colorDesc.Width;
+                kinect_height = colorDesc.Height;
+
+                colorPixelData = new byte[4 * colorDesc.LengthInPixels];
+
+                var depthDesc = sensor.DepthFrameSource.FrameDescription;
+                depthData = new ushort[depthDesc.LengthInPixels];
+                cameraSpacePoints = new CameraSpacePoint[depthDesc.LengthInPixels];
+
                 colorBitmap = new Bitmap(kinect_width, kinect_height);
-                kinect_display.Image = (Image)colorBitmap.Clone();
-                kinect_display.Refresh();
+
+                kinectDisplay.Image = colorBitmap;
+                kinectDisplay.Refresh();
             }
-            catch (Exception ex) {
+            catch (Exception ex)
+            {
                 MessageBox.Show(ex.Message);
                 return false;
             }
@@ -56,21 +79,29 @@ namespace KinectMapping
             return true;
         }
 
-        public void startKinect() {
-            if (sensor != null && !sensor.IsOpen) {
+        public void startKinect()
+        {
+            if (sensor != null && !sensor.IsOpen)
+            {
                 sensor.Open();
             }
         }
 
-        public void stopKinect() {
-            if (sensor != null && sensor.IsOpen) {
-                if (colorReader != null) {
+        public void stopKinect()
+        {
+            if (sensor != null && sensor.IsOpen)
+            {
+                if (colorReader != null)
+                {
                     colorReader.FrameArrived -= colorReader_FrameArrived;
+                    colorReader.Dispose();
                     colorReader = null;
                 }
-                
-                if (depthReader != null) {
+
+                if (depthReader != null)
+                {
                     depthReader.FrameArrived -= depthReader_FrameArrived;
+                    depthReader.Dispose();
                     depthReader = null;
                 }
 
@@ -78,54 +109,103 @@ namespace KinectMapping
             }
         }
 
-        private void colorReader_FrameArrived(object sender, ColorFrameArrivedEventArgs e) {
-            ColorFrame frame = e.FrameReference.AcquireFrame();
+        private void colorReader_FrameArrived(object sender, ColorFrameArrivedEventArgs e)
+        {
+            using (ColorFrame frame = e.FrameReference.AcquireFrame())
+            {
+                if (frame != null)
+                {
 
-            if (frame != null) {
-                byte[] pixelData = new byte[4 * frame.FrameDescription.LengthInPixels];
-                frame.CopyConvertedFrameDataToArray(pixelData, ColorImageFormat.Bgra);
-                frame.Dispose();
+                    try
+                    {
+                        frame.CopyConvertedFrameDataToArray(colorPixelData, ColorImageFormat.Bgra);
+                        TransferPixelsToBitmapObject((Bitmap)kinectDisplay.Image, colorPixelData);
+                        kinectDisplay.Refresh();
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(ex.Message);
+                    }
 
-                try {
-                    TransferPixelsToBitmapObject((Bitmap)(kinect_display.Image), pixelData);
-                    kinect_display.Refresh();
+                    //Application.DoEvents();
                 }
-                catch (Exception ex) {
-                    MessageBox.Show(ex.Message);
-                }
-
-                Application.DoEvents();
             }
         }
 
-        private void depthReader_FrameArrived(object sender, DepthFrameArrivedEventArgs e) {
-            DepthFrame frame = e.FrameReference.AcquireFrame();
-            if (frame != null) {
-                ushort[] depthData = new ushort[frame.FrameDescription.LengthInPixels];
-                frame.CopyFrameDataToArray(depthData);
 
-                CameraSpacePoint[] cameraSpacePoints = new CameraSpacePoint[depthData.Length];
-                coordinateMapper.MapDepthFrameToCameraSpace(depthData, cameraSpacePoints);
+        private void depthReader_FrameArrived(object sender, DepthFrameArrivedEventArgs e)
+        {
+            using (DepthFrame frame = e.FrameReference.AcquireFrame())
+            {
+                if (frame != null)
+                {
+                    frame.CopyFrameDataToArray(depthData);
 
-                for(int i = 0; i < cameraSpacePoints.Length; i++) {
-                    CameraSpacePoint point = cameraSpacePoints[i];
-                    Console.WriteLine("Point {0}: ({1:0.00}, {2:0.00}, {3:0.00})", i, point.X, point.Y, point.Z);
+                    coordinateMapper.MapDepthFrameToCameraSpace(depthData, cameraSpacePoints);
+
+                    for (int i = 0; i < cameraSpacePoints.Length; i += 5)
+                    {
+                        CameraSpacePoint point = cameraSpacePoints[i];
+                        //Console.WriteLine("Point {0}: ({1:0.00}, {2:0.00}, {3:0.00})", i, point.X, point.Y, point.Z);
+                    }
                 }
             }
-
         }
 
-        private void TransferPixelsToBitmapObject(Bitmap bmTarget, byte[] byPixelsForBitmap) {
+        private void TransferPixelsToBitmapObject(Bitmap bmTarget, byte[] byPixelsForBitmap)
+        {
             Rectangle rectAreaOfInterest = new Rectangle(0, 0, bmTarget.Width, bmTarget.Height);
+            BitmapData bmpData = null;
 
-            BitmapData bmpData = bmTarget.LockBits(rectAreaOfInterest, ImageLockMode.WriteOnly, bmTarget.PixelFormat);
-            IntPtr ptrFirstScanLineOfBitmap = bmpData.Scan0;
+            try
+            {
+                bmpData = bmTarget.LockBits(rectAreaOfInterest, ImageLockMode.WriteOnly, bmTarget.PixelFormat);
+                IntPtr ptrFirstScanLineOfBitmap = bmpData.Scan0;
+                int length = byPixelsForBitmap.Length;
 
-            int length = byPixelsForBitmap.Length;
+                Marshal.Copy(byPixelsForBitmap, 0, ptrFirstScanLineOfBitmap, length);
 
-            System.Runtime.InteropServices.Marshal.Copy(byPixelsForBitmap, 0, ptrFirstScanLineOfBitmap, length);
-            bmTarget.UnlockBits(bmpData);
-            bmpData = null;
+            }
+            finally
+            {
+                if (bmpData != null)
+                {
+                    bmTarget.UnlockBits(bmpData);
+                }
+            }
+        }
+
+        ~KinectUtil()
+        {
+            Dispose(false);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!isDisposed)
+            {
+                if (disposing)
+                {
+                    stopKinect();
+                    if (colorBitmap != null)
+                    {
+                        colorBitmap.Dispose();
+                        colorBitmap = null;
+                    }
+
+                    colorPixelData = null;
+                    depthData = null;
+                    cameraSpacePoints = null;
+                }
+
+                isDisposed = true;
+            }
         }
     }
 }
