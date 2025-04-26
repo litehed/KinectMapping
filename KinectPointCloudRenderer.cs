@@ -1,8 +1,5 @@
 using System;
-using System.Collections.Generic;
-using System.Drawing;
 using System.Windows.Forms;
-using Microsoft.Kinect;
 using OpenTK;
 using OpenTK.Graphics.OpenGL;
 
