@@ -22,6 +22,10 @@ namespace KinectMapping
         private float pitch = 0.0f;
         private float roll = 0.0f;
 
+        private int lastPointCount = 0;
+        private float[] vertices;
+        private float[] colors;
+
 
         public KinectPointCloudRenderer(KinectUtil kinectUtil, GLControl glControl)
         {
@@ -57,17 +61,25 @@ namespace KinectMapping
 
             int width = kinectUtil.getDepthWidth();
             int height = kinectUtil.getDepthHeight();
+            int area = width * height;
+
+            if (width == 0 || height == 0)
+                return;
+
+
+            vertices = new float[area * 3];
+            colors = new float[area * 3];
 
             // Generate vertex buffer
             vboVertexId = GL.GenBuffer();
             GL.BindBuffer(BufferTarget.ArrayBuffer, vboVertexId);
-            GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(width * height * 3 * sizeof(float)),
+            GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(area * 3 * sizeof(float)),
                           IntPtr.Zero, BufferUsageHint.DynamicDraw);
 
             // Generate color buffer
             vboColorId = GL.GenBuffer();
             GL.BindBuffer(BufferTarget.ArrayBuffer, vboColorId);
-            GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(width * height * 3 * sizeof(float)),
+            GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(area * 3 * sizeof(float)),
                           IntPtr.Zero, BufferUsageHint.DynamicDraw);
 
             vboInitialized = true;
@@ -81,13 +93,13 @@ namespace KinectMapping
 
             var points = kinectUtil.GetPointCloud();
             if (points.Count == 0)
+            {
+                lastPointCount = 0;
                 return;
+            }
 
-            float[] vertices = new float[points.Count * 3];
-            float[] colors = new float[points.Count * 3];
-
-            float minDepth = 0;
-            float maxDepth = 4.3F;
+            //float minDepth = 0;
+            //float maxDepth = 4.3F;
 
             var colorPoints = kinectUtil.MapDepthPointsToColorSpace();
             byte[] colorData = kinectUtil.GetColorPixelData();
@@ -125,13 +137,15 @@ namespace KinectMapping
                 validPointCount++;
             }
 
+            lastPointCount = validPointCount;
+
             GL.BindBuffer(BufferTarget.ArrayBuffer, vboVertexId);
             GL.BufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero,
-                            (IntPtr)(vertices.Length * sizeof(float)), vertices);
+                            (IntPtr)(validPointCount * 3 * sizeof(float)), vertices);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, vboColorId);
             GL.BufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero,
-                            (IntPtr)(colors.Length * sizeof(float)), colors);
+                            (IntPtr)(validPointCount * 3 * sizeof(float)), colors);
         }
 
         private void RotateCamera()
@@ -157,8 +171,7 @@ namespace KinectMapping
         {
             UpdateVBOs();
 
-            int pointCount = kinectUtil.GetPointCloud().Count;
-            if (pointCount == 0)
+            if (lastPointCount == 0)
                 return;
 
             GL.EnableClientState(ArrayCap.VertexArray);
@@ -171,7 +184,7 @@ namespace KinectMapping
             GL.ColorPointer(3, ColorPointerType.Float, 0, IntPtr.Zero);
 
             GL.PointSize(1.0f);
-            GL.DrawArrays(PrimitiveType.Points, 0, pointCount);
+            GL.DrawArrays(PrimitiveType.Points, 0, lastPointCount);
 
             GL.DisableClientState(ArrayCap.VertexArray);
             GL.DisableClientState(ArrayCap.ColorArray);

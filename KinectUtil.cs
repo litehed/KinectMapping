@@ -27,6 +27,10 @@ namespace KinectMapping
         private byte[] colorPixelData = null;
         private ushort[] depthData = null;
         private CameraSpacePoint[] cameraSpacePoints = null;
+        private ColorSpacePoint[] colorSpacePoints = null;
+
+        // Monitor rather than mutex for performance improvements
+        private readonly object frameLock = new object();
 
         private bool isDisposed = false;
 
@@ -68,6 +72,7 @@ namespace KinectMapping
                 var depthDesc = sensor.DepthFrameSource.FrameDescription;
                 depthData = new ushort[depthDesc.LengthInPixels];
                 cameraSpacePoints = new CameraSpacePoint[depthDesc.LengthInPixels];
+                colorSpacePoints = new ColorSpacePoint[depthDesc.LengthInPixels];
                 depth_width = depthDesc.Width;
                 depth_height = depthDesc.Height;
 
@@ -125,7 +130,10 @@ namespace KinectMapping
 
                     try
                     {
-                        frame.CopyConvertedFrameDataToArray(colorPixelData, ColorImageFormat.Bgra);
+                        lock (frameLock)
+                        {
+                            frame.CopyConvertedFrameDataToArray(colorPixelData, ColorImageFormat.Bgra);
+                        }
                         TransferPixelsToBitmapObject((Bitmap)kinectDisplay.Image, colorPixelData);
                         kinectDisplay.Refresh();
                     }
@@ -146,15 +154,20 @@ namespace KinectMapping
             {
                 if (frame != null)
                 {
-                    frame.CopyFrameDataToArray(depthData);
 
-                    coordinateMapper.MapDepthFrameToCameraSpace(depthData, cameraSpacePoints);
-
-                    for (int i = 0; i < cameraSpacePoints.Length; i++)
+                    lock (frameLock)
                     {
-                        CameraSpacePoint point = cameraSpacePoints[i];
-                        //Console.WriteLine("Point {0}: ({1:0.00}, {2:0.00}, {3:0.00})", i, point.X, point.Y, point.Z);
+                        frame.CopyFrameDataToArray(depthData);
+                        coordinateMapper.MapDepthFrameToCameraSpace(depthData, cameraSpacePoints);
+                        coordinateMapper.MapDepthFrameToColorSpace(depthData, colorSpacePoints);
                     }
+
+
+                    //for (int i = 0; i < cameraSpacePoints.Length; i++)
+                    //{
+                    //    CameraSpacePoint point = cameraSpacePoints[i];
+                    //    //Console.WriteLine("Point {0}: ({1:0.00}, {2:0.00}, {3:0.00})", i, point.X, point.Y, point.Z);
+                    //}
                 }
             }
         }
@@ -163,16 +176,19 @@ namespace KinectMapping
         {
             var points = new List<CameraSpacePoint>();
 
-            if (cameraSpacePoints == null)
-                return points;
-
-            for (int i = 0; i < cameraSpacePoints.Length; i++)
+            lock (frameLock)
             {
-                CameraSpacePoint p = cameraSpacePoints[i];
+                if (cameraSpacePoints == null)
+                    return points;
 
-                if (!float.IsInfinity(p.X) && !float.IsNaN(p.X) && !float.IsInfinity(p.Y) && !float.IsNaN(p.Y) && !float.IsInfinity(p.Z) && !float.IsNaN(p.Z))
+                for (int i = 0; i < cameraSpacePoints.Length; i++)
                 {
-                    points.Add(p);
+                    CameraSpacePoint p = cameraSpacePoints[i];
+
+                    if (!float.IsInfinity(p.X) && !float.IsNaN(p.X) && !float.IsInfinity(p.Y) && !float.IsNaN(p.Y) && !float.IsInfinity(p.Z) && !float.IsNaN(p.Z))
+                    {
+                        points.Add(p);
+                    }
                 }
             }
 
@@ -181,35 +197,43 @@ namespace KinectMapping
 
         public List<ColorSpacePoint> MapDepthPointsToColorSpace()
         {
-            if (cameraSpacePoints == null || depthData == null)
-                return new List<ColorSpacePoint>();
-
-            var depthFrameDescription = sensor.DepthFrameSource.FrameDescription;
-            ColorSpacePoint[] colorSpacePoints = new ColorSpacePoint[depthFrameDescription.Width * depthFrameDescription.Height];
-
-            coordinateMapper.MapDepthFrameToColorSpace(depthData, colorSpacePoints);
-
-            // Filter the color space points to match depths
             var filteredPoints = new List<ColorSpacePoint>();
 
-            for (int i = 0; i < cameraSpacePoints.Length; i++)
+            lock (frameLock)
             {
-                CameraSpacePoint p = cameraSpacePoints[i];
 
-                if (!float.IsInfinity(p.X) && !float.IsNaN(p.X) &&
-                    !float.IsInfinity(p.Y) && !float.IsNaN(p.Y) &&
-                    !float.IsInfinity(p.Z) && !float.IsNaN(p.Z))
+                if (cameraSpacePoints == null || colorSpacePoints == null)
                 {
-                    filteredPoints.Add(colorSpacePoints[i]);
+                    return filteredPoints;
+                }
+
+                for (int i = 0; i < cameraSpacePoints.Length; i++)
+                {
+                    CameraSpacePoint p = cameraSpacePoints[i];
+
+                    if (!float.IsInfinity(p.X) && !float.IsNaN(p.X) &&
+                        !float.IsInfinity(p.Y) && !float.IsNaN(p.Y) &&
+                        !float.IsInfinity(p.Z) && !float.IsNaN(p.Z))
+                    {
+                        filteredPoints.Add(colorSpacePoints[i]);
+                    }
                 }
             }
-
             return filteredPoints;
         }
 
         public byte[] GetColorPixelData()
         {
-            return colorPixelData;
+            lock (frameLock)
+            {
+                if (colorPixelData == null)
+                {
+                    return null;
+                }
+                var copy = new byte[colorPixelData.Length];
+                Array.Copy(colorPixelData, copy, colorPixelData.Length);
+                return copy;
+            }
         }
 
         public int GetColorWidth()
@@ -282,6 +306,7 @@ namespace KinectMapping
                     colorPixelData = null;
                     depthData = null;
                     cameraSpacePoints = null;
+                    colorSpacePoints = null;
                 }
 
                 isDisposed = true;
